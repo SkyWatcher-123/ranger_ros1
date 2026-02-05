@@ -104,3 +104,6 @@ $ catkin_make
 * /cmd_vel (geometry_msgs::Twist)
 
 ### Services
+
+* /parking_service(ranger_msgs::TriggerParkMode)
+
