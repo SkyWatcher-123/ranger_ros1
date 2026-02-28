@@ -595,15 +595,24 @@ double RangerROSMessenger::CalculateSteeringAngle(geometry_msgs::Twist msg,
   double linear = std::abs(msg.linear.x);
   double angular = std::abs(msg.angular.z);
 
+  if (angular < 1e-6) {
+    radius = std::numeric_limits<double>::infinity(); 
+    return 0.0; 
+  }
   // Circular motion
   radius = linear / angular;
-  int k = (msg.angular.z * msg.linear.x) >= 0 ? 1.0 : -1.0;
+  int k = (msg.angular.z * msg.linear.x) >= 0 ? 1 : -1;
 
-  double l, w, phi_i;
+  double l, w, phi_i, x;
   l = robot_params_.wheelbase;
   w = robot_params_.track;
-  phi_i = atan((l / 2) / (radius - w / 2));
-  ROS_INFO("command linear: %f, steering_angle: %f", linear, k * phi_i);
+  x = sqrt(radius * radius + (l / 2) * (l / 2));
+  // phi_i = atan((l / 2) / (x - w / 2));
+  phi_i = atan((l / 2) / radius);
+
+  const double max_phi_rad = 40.0 * M_PI / 180.0;
+  phi_i = std::min(phi_i, max_phi_rad);
+
   return k * phi_i;
 }
 
