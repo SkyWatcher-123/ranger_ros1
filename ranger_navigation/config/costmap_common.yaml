@@ -1,0 +1,41 @@
+# Common costmap parameters for the AgileX Ranger Mini 3.0.
+# Adapted from husky_navigation/config/costmap_common.yaml.
+#
+# footprint is the physical outline of the robot in the base_link frame
+# (x forward, y left). The Ranger Mini 3.0 chassis is ~0.74 m (L) x 0.50 m (W)
+# (wheelbase 0.494 m, track 0.364 m plus body/wheel overhang). Confirm against
+# your robot and enlarge if bumpers, sensors or payloads stick out.
+footprint: [[-0.37, -0.25], [-0.37, 0.25], [0.37, 0.25], [0.37, -0.25]]
+footprint_padding: 0.02
+
+robot_base_frame: base_link
+update_frequency: 4.0
+publish_frequency: 3.0
+transform_tolerance: 0.5
+
+resolution: 0.05
+
+obstacle_range: 3.0
+raytrace_range: 3.5
+
+# ---------------------------------------------------------------------------
+# Layer definitions
+# ---------------------------------------------------------------------------
+static:
+    map_topic: /map
+    subscribe_to_updates: true
+
+# 2D LiDAR obstacle source. You have NO sensors yet, so this layer stays empty
+# and move_base prints a harmless "observation buffer has not been updated"
+# warning -- global planning still works off the static map. When you add a
+# LiDAR, point `topic` at its scan and make sure base_link -> <laser_frame> is
+# published on TF (e.g. a static_transform_publisher).
+obstacles_laser:
+    observation_sources: laser
+    laser: {data_type: LaserScan, clearing: true, marking: true, topic: scan, inf_is_valid: true}
+
+# Tighter than Husky's 1.0 m because the Ranger Mini is a much smaller robot;
+# raise inflation_radius for more obstacle clearance, lower it for tight spaces.
+inflation:
+    inflation_radius: 0.4
+    cost_scaling_factor: 3.0

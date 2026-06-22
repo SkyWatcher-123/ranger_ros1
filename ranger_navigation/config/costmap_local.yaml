@@ -1,0 +1,12 @@
+# Local costmap: a rolling window around the robot in the odom frame.
+# Identical in structure to husky_navigation. Without a LiDAR the obstacle
+# layer is empty, so the local planner just tracks the global plan. If you want
+# the local planner to respect mapped walls even before adding a sensor, add
+#   - {name: static, type: "costmap_2d::StaticLayer"}
+# as the first plugin below (and set rolling_window: false).
+global_frame: odom
+rolling_window: true
+
+plugins:
+  - {name: obstacles_laser,           type: "costmap_2d::ObstacleLayer"}
+  - {name: inflation,                 type: "costmap_2d::InflationLayer"}

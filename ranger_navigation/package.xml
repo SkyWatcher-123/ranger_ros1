@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>ranger_navigation</name>
+  <version>0.1.0</version>
+  <description>
+    Autonomous navigation configuration and launch files for the AgileX Ranger
+    Mini (move_base global + local planning), modelled on husky_navigation.
+  </description>
+
+  <maintainer email="agilex@todo.todo">ranger_navigation maintainer</maintainer>
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>roslaunch</build_depend>
+
+  <!-- move_base and the planners used by the launch files -->
+  <exec_depend>move_base</exec_depend>
+  <exec_depend>navfn</exec_depend>
+  <exec_depend>dwa_local_planner</exec_depend>
+  <exec_depend>base_local_planner</exec_depend>
+  <exec_depend>costmap_2d</exec_depend>
+  <!-- map server + a stand-in for localization while amcl is not yet used -->
+  <exec_depend>map_server</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <!-- pulled in now so adding amcl later needs no package.xml change -->
+  <exec_depend>amcl</exec_depend>
+
+  <export>
+  </export>
+</package>

@@ -1,0 +1,9 @@
+# Global costmap built on the provided static map (map frame).
+# Used when no_static_map:=false (the default). Identical to husky_navigation.
+global_frame: map
+rolling_window: false
+track_unknown_space: true
+
+plugins:
+  - {name: static,                  type: "costmap_2d::StaticLayer"}
+  - {name: inflation,               type: "costmap_2d::InflationLayer"}

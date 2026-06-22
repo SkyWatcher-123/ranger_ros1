@@ -1,0 +1,10 @@
+# Mapless global costmap: a rolling window in the odom frame built from the
+# laser instead of a static map. Used when no_static_map:=true. Identical to
+# husky_navigation. Requires a working LiDAR to be useful.
+global_frame: odom
+rolling_window: true
+track_unknown_space: true
+
+plugins:
+  - {name: obstacles_laser,           type: "costmap_2d::ObstacleLayer"}
+  - {name: inflation,                 type: "costmap_2d::InflationLayer"}

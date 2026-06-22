@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<!--
+  ranger_mini_move_base_demo.launch
+
+  Convenience launch to test global + local planning on a PROVIDED map WITHOUT
+  amcl. It is the analogue of husky's amcl_demo.launch, but localization is
+  replaced by a static identity map -> odom transform: the robot localizes by
+  wheel odometry only, so it assumes it starts at the map origin and drifts
+  over time. Good for bringing up / testing the planner pipeline; add amcl
+  (and a LiDAR) for accurate long-run navigation.
+
+  Start the base driver FIRST in another terminal, with odom TF enabled:
+    roslaunch ranger_bringup ranger_mini_v3.launch publish_odom_tf:=true
+  then:
+    roslaunch ranger_navigation ranger_mini_move_base_demo.launch \
+        map_file:=/path/to/your_map.yaml
+  (map_file defaults to the bundled empty 5x5 m map for a quick smoke test.)
+-->
+<launch>
+
+  <arg name="map_file" default="$(find ranger_navigation)/maps/empty_map.yaml"/>
+
+  <!-- Provided map -->
+  <node name="map_server" pkg="map_server" type="map_server" args="$(arg map_file)" />
+
+  <!-- No amcl: pin odom to map with a static identity transform.
+       args: x y z yaw pitch roll parent_frame child_frame -->
+  <node name="static_map_to_odom" pkg="tf2_ros" type="static_transform_publisher"
+        args="0 0 0 0 0 0 map odom" />
+
+  <!-- Global + local planner -->
+  <include file="$(find ranger_navigation)/launch/ranger_mini_move_base.launch"/>
+
+</launch>

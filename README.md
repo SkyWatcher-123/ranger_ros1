@@ -73,10 +73,32 @@ $ catkin_make
     ```bash
     $ roslaunch ranger_bringup ranger_mini_v2.launch #for ranger_mini 2.0
     ```
+
+* Start the base node for ranger_mini_v3
+
+    ```bash
+    $ roslaunch ranger_bringup ranger_mini_v3.launch #for ranger_mini 3.0
+    ```
 * Use keyboard to control ranger
     ```bash
     $ rosrun teleop_twist_keyboard teleop_twist_keyboard.py
     ```
+
+## Navigation
+
+The `ranger_navigation` package provides a `move_base` pipeline (global +
+local planner) for the Ranger Mini, modelled on `husky_navigation`. To test
+global/local planning on a provided map without amcl or sensors:
+
+```bash
+# terminal 1 - base driver, with odom -> base_link TF enabled
+$ roslaunch ranger_bringup ranger_mini_v3.launch publish_odom_tf:=true
+# terminal 2 - map_server + static map->odom + move_base
+$ roslaunch ranger_navigation ranger_mini_move_base_demo.launch map_file:=/path/to/your_map.yaml
+```
+
+See [`ranger_navigation/README.md`](./ranger_navigation/README.md) for details
+and next steps (LiDAR, amcl, gmapping).
 
 
 ## ROS interface
@@ -84,7 +106,7 @@ $ catkin_make
 ### Parameters
 
 * can_device (string): **can0**
-* robot_model (string): **ranger**/ranger_mini_v1/ranger_mini_v2
+* robot_model (string): **ranger**/ranger_mini_v1/ranger_mini_v2/ranger_mini_v3
 * update_rate (int): **50**
 * base_frame (string): **base_link**
 * odom_frame (string): **odom**

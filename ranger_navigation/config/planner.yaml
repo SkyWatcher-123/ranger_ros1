@@ -1,0 +1,113 @@
+controller_frequency: 5.0
+recovery_behaviour_enabled: true
+
+NavfnROS:
+  allow_unknown: true # Allow navfn to plan through unknown space.
+  default_tolerance: 0.1 # Tolerance on the goal point for the planner.
+
+# ---------------------------------------------------------------------------
+# Ranger Mini 3.0 kinematic note (read before tuning)
+# ---------------------------------------------------------------------------
+# ranger_base translates /cmd_vel into one of several motion modes:
+#   * linear.x (+ angular.z), turn radius >= min_turn_radius (~0.48 m)
+#                                              -> dual-Ackermann (car-like arc)
+#   * turn radius <  min_turn_radius           -> spinning (rotate in place)
+#   * linear.y != 0                            -> parallel / crab (strafe)
+# We drive it here as a differential-drive robot (linear.x + angular.z, the
+# y-velocity disabled), exactly like husky_navigation. The base then picks
+# Ackermann for gentle arcs and spinning for tight turns / rotate-to-goal, so
+# the robot can still reach any pose. Trade-off: when DWA requests a small-
+# radius arc (low x, high yaw) the base spins in place instead of curving, so
+# motion near tight turns is "stop-rotate-go" rather than a smooth curve.
+# For true smooth Ackermann arcs, swap the local planner for teb_local_planner
+# with min_turning_radius set (see README.md).
+
+TrajectoryPlannerROS:
+  # Robot Configuration Parameters
+  acc_lim_x: 1.0
+  acc_lim_theta: 2.0
+
+  max_vel_x: 0.5
+  min_vel_x: 0.0
+
+  max_vel_theta: 1.0
+  min_vel_theta: -1.0
+  min_in_place_vel_theta: 0.2
+
+  holonomic_robot: false
+  escape_vel: -0.1
+
+  # Goal Tolerance Parameters
+  yaw_goal_tolerance: 0.1
+  xy_goal_tolerance: 0.2
+  latch_xy_goal_tolerance: false
+
+  # Forward Simulation Parameters
+  sim_time: 2.0
+  sim_granularity: 0.02
+  angular_sim_granularity: 0.02
+  vx_samples: 6
+  vtheta_samples: 20
+  controller_frequency: 5.0
+
+  # Trajectory scoring parameters
+  meter_scoring: true
+  occdist_scale: 0.1
+  pdist_scale: 0.75
+  gdist_scale: 1.0
+
+  heading_lookahead: 0.325
+  heading_scoring: false
+  heading_scoring_timestep: 0.8
+  dwa: true
+  simple_attractor: false
+  publish_cost_grid_pc: true
+
+  # Oscillation Prevention Parameters
+  oscillation_reset_dist: 0.25
+  escape_reset_dist: 0.1
+  escape_reset_theta: 0.1
+
+DWAPlannerROS:
+  # Robot configuration parameters.
+  # RM3 hardware maxima are ~1.5 m/s linear and ~4.8 rad/s spinning; we keep
+  # conservative navigation limits here (raise once the pipeline is trusted).
+  # Husky used acc_lim_x 2.5 / acc_lim_th 3.2 -- lowered for car-like steering.
+  acc_lim_x: 1.0
+  acc_lim_y: 0.0      # no native strafing in diff-drive mode
+  acc_lim_th: 2.0
+
+  max_vel_x: 0.5
+  min_vel_x: 0.0      # 0 -> no reverse; allows full stop and rotate-in-place
+  max_vel_y: 0.0      # diff-drive treatment, same as husky
+  min_vel_y: 0.0
+
+  max_vel_trans: 0.5
+  min_vel_trans: 0.1
+  max_vel_rot: 1.0    # keep modest so forward arcs stay near/above min radius
+  min_vel_rot: 0.2
+
+  # Goal Tolerance Parameters
+  yaw_goal_tolerance: 0.1
+  xy_goal_tolerance: 0.2
+  latch_xy_goal_tolerance: false
+
+  # # Forward Simulation Parameters (DWA defaults are used unless uncommented)
+  # sim_time: 2.0
+  # sim_granularity: 0.02
+  # vx_samples: 6
+  # vy_samples: 0
+  # vtheta_samples: 20
+  # penalize_negative_x: true
+
+  # # Trajectory scoring parameters
+  # path_distance_bias: 32.0
+  # goal_distance_bias: 24.0
+  # occdist_scale: 0.01
+  # forward_point_distance: 0.325
+  # stop_time_buffer: 0.2
+  # scaling_speed: 0.25
+  # max_scaling_factor: 0.2
+
+  # # Oscillation Prevention Parameters
+  # oscillation_reset_dist: 0.25

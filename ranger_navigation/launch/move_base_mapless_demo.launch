@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<!--
+  move_base_mapless_demo.launch
+
+  Mapless navigation: run move_base with no static map, building the global
+  costmap from the laser in the odom frame. Mirrors husky's
+  move_base_mapless_demo.launch. Requires a working LiDAR to be useful; with no
+  sensors the robot has nothing to plan around. Run ranger_bringup (with
+  publish_odom_tf:=true) first.
+-->
+<launch>
+
+  <include file="$(find ranger_navigation)/launch/ranger_mini_move_base.launch">
+    <arg name="no_static_map" value="true"/>
+  </include>
+
+</launch>
