@@ -1,0 +1,79 @@
+<launch>
+  <!-- ============================================================ -->
+  <!-- AprilTag localization for the Ranger Mini base.              -->
+  <!-- Reads /tag_detections and publishes the 3 planar base joints -->
+  <!-- to /ranger/joint_states. robot_state_publisher then builds   -->
+  <!-- odom -> base_link from those joints + the URDF.              -->
+  <!--                                                              -->
+  <!-- NOTE: run EITHER this node OR cmd_vel_to_odom.py, never both -->
+  <!-- (they drive the same 3 joints).                             -->
+  <!-- ============================================================ -->
+
+  <!-- Frames (match the rangerxarm_abb bringup defaults) -->
+  <arg name="world_frame" default="map"/>
+  <arg name="odom_frame"  default="odom"/>
+  <arg name="base_frame"  default="base_link"/>
+
+  <!-- Localization camera. Leave camera_frame empty to auto-use the optical
+       frame carried in each detection (recommended). The physical camera is
+       "loc_camera"; apriltag_ros stamps its optical child frame into the
+       detection, and that frame must exist in the TF tree from the URDF. -->
+  <arg name="camera_frame" default=""/>
+
+  <arg name="tag_topic"          default="/tag_detections"/>
+  <arg name="joint_states_topic" default="/ranger/joint_states"/>
+
+  <!-- Publish rate of /ranger/joint_states (Hz). 3.0 per spec; 10.0 is also fine. -->
+  <arg name="rate" default="3.0"/>
+
+  <!-- Known tag poses -> rosparam /tag_locations -->
+  <arg name="tag_config" default="$(find ranger_bringup)/config/apriltag_localization_dfab_test.yaml"/>
+  <rosparam file="$(arg tag_config)" command="load"/>
+
+  <!-- map -> odom is a FIXED joint inside rangerxarm_abb.urdf.xacro, published by
+       robot_state_publisher, so we do NOT publish it here by default (would clash). -->
+  <arg name="publish_world_to_odom" default="false"/>
+  <group if="$(arg publish_world_to_odom)">
+    <node pkg="tf2_ros" type="static_transform_publisher" name="world_to_odom"
+          args="0 0 0 0 0 0 $(arg world_frame) $(arg odom_frame)"/>
+  </group>
+
+  <!-- Optional: RViz visualization of the known tag poses (odom -> loc_<id>) -->
+  <arg name="publish_tag_location_frames" default="true"/>
+  <group if="$(arg publish_tag_location_frames)">
+    <node pkg="ranger_bringup" type="publish_tag_locations_tf.py"
+          name="publish_tag_locations_tf" output="screen">
+      <param name="parent_frame" value="$(arg odom_frame)"/>
+      <param name="child_prefix" value="loc_"/>
+    </node>
+  </group>
+
+  <!-- AprilTag -> 3 ranger base joint states -->
+  <node pkg="ranger_bringup" type="apriltag_to_ranger_joint_state.py"
+        name="apriltag_to_ranger_joint_state" output="screen">
+    <param name="odom_frame"         value="$(arg odom_frame)"/>
+    <param name="base_frame"         value="$(arg base_frame)"/>
+    <param name="camera_frame"       value="$(arg camera_frame)"/>
+    <param name="tag_topic"          value="$(arg tag_topic)"/>
+    <param name="joint_states_topic" value="$(arg joint_states_topic)"/>
+
+    <!-- Joint names: MUST match rangerxarm_abb.urdf.xacro -->
+    <param name="joint_x"   value="odom_to_ranger_base_x"/>
+    <param name="joint_y"   value="ranger_base_x_to_y"/>
+    <param name="joint_yaw" value="ranger_base_y_to_yaw"/>
+
+    <!-- Fusion / filtering -->
+    <param name="max_tag_distance" value="2.0"/>
+    <!-- 0.0 => all tags equal; 1.0 => inverse-distance; 2.0 => stronger near-tag preference -->
+    <param name="weight_power" value="0.0"/>
+    <!-- 1.0 no smoothing; 0.6 light smoothing; 0.2 heavy smoothing -->
+    <param name="smoothing_alpha" value="0.6"/>
+
+    <param name="rate"          value="$(arg rate)"/>
+    <param name="stale_timeout" value="1.0"/>
+
+    <!-- Joint states are the product. Enable only if you also want nav_msgs/Odometry. -->
+    <param name="publish_odom" value="false"/>
+    <param name="base_height"  value="0.346"/>
+  </node>
+</launch>
