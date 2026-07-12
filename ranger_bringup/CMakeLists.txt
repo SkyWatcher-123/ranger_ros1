@@ -158,6 +158,9 @@ include_directories(
 catkin_install_python(PROGRAMS
   scripts/apriltag_to_ranger_joint_state.py
   scripts/publish_tag_locations_tf.py
+  scripts/tape_line_detector.py
+  scripts/line_keeper.py
+  scripts/go_to_base_x.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

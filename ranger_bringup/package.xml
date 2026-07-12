@@ -59,6 +59,15 @@
   <exec_depend>nav_msgs</exec_depend>
   <exec_depend>apriltag_ros</exec_depend>
 
+  <!-- Runtime deps for the yellow-tape line-following stack -->
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
+  <!-- build+exec so catkin generates ranger_msgs/SetBaseX before this package is used -->
+  <depend>ranger_msgs</depend>
+  <exec_depend>cv_bridge</exec_depend>
+  <exec_depend>python3-opencv</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>

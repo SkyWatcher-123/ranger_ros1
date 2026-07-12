@@ -1,0 +1,7 @@
+# Request: drive base_link to a target X coordinate in the map frame,
+# rolling along the yellow tape at a strictly uniform speed.
+float64 target_x      # desired base_link X in the map frame [m]
+float64 tolerance     # stop when |target_x - current_x| <= tolerance [m]; <= 0 uses the node default
+---
+bool accepted         # true if the goal was accepted and motion started
+string message        # human-readable status / reason
