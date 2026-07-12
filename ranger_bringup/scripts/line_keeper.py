@@ -45,6 +45,10 @@ class LineKeeper:
         self.wz_slew = float(rospy.get_param("~wz_slew", 1.5))        # rad/s^2
         self.max_speed = float(rospy.get_param("~max_speed", 0.1))    # m/s clamp on linear.x
         self.v_min = float(rospy.get_param("~v_min", 0.02))          # below this, don't steer (avoid spin mode)
+        # Lateral tolerance band: within +/-deadband_ct [m] no cross-track correction
+        # is applied (heading is still held). This is the knob to trade tightness vs.
+        # calm steering -- set it to your acceptable lateral drift (e.g. 0.02-0.05),
+        # or ~0 and raise the gains to probe the tightest accuracy the loop can hold.
         self.deadband_ct = float(rospy.get_param("~deadband_ct", 0.005))   # m
         self.deadband_hd = float(rospy.get_param("~deadband_hd", 0.0087))  # rad (~0.5 deg)
 
@@ -54,6 +58,20 @@ class LineKeeper:
         self.cmd_timeout = float(rospy.get_param("~cmd_timeout", 0.5))      # s
         self.min_confidence = float(rospy.get_param("~min_confidence", 0.3))
         self.stop_on_tape_loss = bool(rospy.get_param("~stop_on_tape_loss", True))
+
+        # Live tuning: re-read the gain/tolerance params periodically so you can
+        # `rosparam set /line_keeper/deadband_ct 0.03` (etc.) mid-run without relaunch.
+        self.live_reconfig = bool(rospy.get_param("~live_reconfig", True))
+        self.reconfig_period = float(rospy.get_param("~reconfig_period", 0.5))  # s
+        self._tunables = ["k_heading", "k_cross", "sign", "max_wz",
+                          "wz_slew", "deadband_ct", "deadband_hd"]
+        self._last_reconfig = rospy.Time(0)
+
+        # Lateral-accuracy meter: RMS / max |cross_track| while actually rolling,
+        # logged every stats_period so you can quantify how tight it actually holds.
+        self.stats_period = float(rospy.get_param("~stats_period", 2.0))  # s; <=0 disables
+        self._reset_stats()
+        self._last_stats = rospy.Time(0)
 
         self.tape = None
         self.tape_t = rospy.Time(0)
@@ -75,6 +93,45 @@ class LineKeeper:
     def cb_tape(self, msg: Vector3Stamped):
         self.tape = msg
         self.tape_t = msg.header.stamp if msg.header.stamp != rospy.Time(0) else rospy.Time.now()
+
+    def _reset_stats(self):
+        self.ct_sq = 0.0
+        self.ct_max = 0.0
+        self.hd_sq = 0.0
+        self.hd_max = 0.0
+        self.stat_n = 0
+
+    def maybe_reconfigure(self, now):
+        if not self.live_reconfig or (now - self._last_reconfig).to_sec() < self.reconfig_period:
+            return
+        self._last_reconfig = now
+        for name in self._tunables:
+            new = float(rospy.get_param("~" + name, getattr(self, name)))
+            if abs(new - getattr(self, name)) > 1e-9:
+                rospy.loginfo("[line_keeper] %s: %.4f -> %.4f", name, getattr(self, name), new)
+                setattr(self, name, new)
+
+    def accumulate_stats(self, ct, hd):
+        # Track the RAW (pre-deadband) errors while rolling -> true achieved accuracy.
+        self.ct_sq += ct * ct
+        self.hd_sq += hd * hd
+        self.ct_max = max(self.ct_max, abs(ct))
+        self.hd_max = max(self.hd_max, abs(hd))
+        self.stat_n += 1
+
+    def maybe_log_stats(self, now):
+        if self.stats_period <= 0.0 or (now - self._last_stats).to_sec() < self.stats_period:
+            return
+        self._last_stats = now
+        if self.stat_n > 0:
+            ct_rms = math.sqrt(self.ct_sq / self.stat_n)
+            hd_rms = math.sqrt(self.hd_sq / self.stat_n)
+            rospy.loginfo("[line_keeper] lateral hold: rms=%.1fmm max=%.1fmm | "
+                          "heading rms=%.2fdeg max=%.2fdeg  (%d samples/%.0fs, band=%.0fmm)",
+                          ct_rms * 1000.0, self.ct_max * 1000.0,
+                          math.degrees(hd_rms), math.degrees(self.hd_max),
+                          self.stat_n, self.stats_period, self.deadband_ct * 1000.0)
+        self._reset_stats()
 
     def step(self, now, dt):
         v = self.cmd_vx if (now - self.cmd_t).to_sec() <= self.cmd_timeout else 0.0
@@ -101,6 +158,7 @@ class LineKeeper:
 
         ct = self.tape.vector.x
         hd = self.tape.vector.y
+        self.accumulate_stats(ct, hd)   # raw errors -> achieved-accuracy meter
         if abs(ct) < self.deadband_ct:
             ct = 0.0
         if abs(hd) < self.deadband_hd:
@@ -130,7 +188,9 @@ class LineKeeper:
             last = now
             if dt <= 0.0:
                 dt = 1.0 / self.rate_hz
+            self.maybe_reconfigure(now)
             self.step(now, dt)
+            self.maybe_log_stats(now)
             r.sleep()
 
 

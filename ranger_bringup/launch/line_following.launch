@@ -19,7 +19,9 @@
   <arg name="camera_info_topic" default="/loc_camera/color/camera_info"/>
 
   <arg name="travel_speed" default="0.1"/>   <!-- strict uniform m/s -->
-  <arg name="tolerance"    default="0.03"/>  <!-- 2-5 cm -->
+  <arg name="tolerance"    default="0.03"/>  <!-- go-to-X longitudinal stop tolerance, 2-5 cm -->
+  <arg name="lateral_tolerance" default="0.03"/>  <!-- allowed left/right drift band [m]; live-tunable -->
+  <arg name="live_tune"    default="true"/>  <!-- re-read gains/tolerance mid-run via rosparam set -->
 
   <!-- ==== Tape detector: image to /ranger/tape (metric BEV line fit) ==== -->
   <node pkg="ranger_bringup" type="tape_line_detector.py" name="tape_line_detector" output="screen">
@@ -64,12 +66,15 @@
     <param name="wz_slew"   value="1.5"/>
     <param name="max_speed" value="$(arg travel_speed)"/>
     <param name="v_min"     value="0.02"/>
-    <param name="deadband_ct" value="0.005"/>
+    <param name="deadband_ct" value="$(arg lateral_tolerance)"/>  <!-- allowed lateral drift band -->
     <param name="deadband_hd" value="0.0087"/>
     <param name="rate"          value="20.0"/>
     <param name="tape_timeout"  value="0.4"/>
     <param name="min_confidence" value="0.3"/>
     <param name="stop_on_tape_loss" value="true"/>
+    <param name="live_reconfig" value="$(arg live_tune)"/>
+    <param name="reconfig_period" value="0.5"/>
+    <param name="stats_period"  value="2.0"/>   <!-- log achieved lateral rms/max every 2 s -->
   </node>
 
   <!-- ==== Go-to-X: SetBaseX service, strict +/-0.1 m/s travel ==== -->
