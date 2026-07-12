@@ -37,8 +37,9 @@ import rospy
 import tf2_ros
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image, CameraInfo
-from geometry_msgs.msg import Vector3Stamped
+from geometry_msgs.msg import Vector3Stamped, Point
 from std_srvs.srv import Trigger, TriggerResponse
+from visualization_msgs.msg import Marker, MarkerArray
 
 
 def wrap_to_pi(a):
@@ -101,6 +102,8 @@ class TapeLineDetector:
 
         self.pub = rospy.Publisher("~tape", Vector3Stamped, queue_size=10)
         self.pub_debug = rospy.Publisher("~debug_image", Image, queue_size=1) if self.publish_debug else None
+        self.publish_markers = bool(rospy.get_param("~publish_markers", True))
+        self.pub_markers = rospy.Publisher("~markers", MarkerArray, queue_size=1) if self.publish_markers else None
 
         self.sub_info = rospy.Subscriber(info_topic, CameraInfo, self.cb_info, queue_size=1)
         self.sub_img = rospy.Subscriber(image_topic, Image, self.cb_image, queue_size=1, buff_size=2 ** 24)
@@ -222,6 +225,49 @@ class TapeLineDetector:
 
         if self.pub_debug is not None:
             self.publish_debug_image(bev, ok, line_pts, out)
+        if self.pub_markers is not None:
+            self.publish_tape_markers(now, ok)
+
+    def _line_marker(self, stamp, mid, ns, rgba):
+        m = Marker()
+        m.header.stamp = stamp
+        m.header.frame_id = self.base_frame
+        m.ns = ns
+        m.id = mid
+        m.type = Marker.LINE_STRIP
+        m.action = Marker.ADD
+        m.scale.x = 0.02          # 2 cm line width
+        m.color.r, m.color.g, m.color.b, m.color.a = rgba
+        m.pose.orientation.w = 1.0
+        return m
+
+    def publish_tape_markers(self, stamp, ok):
+        """Detected tape (green) and stored reference (blue) as ground line strips."""
+        arr = MarkerArray()
+        z = -self.base_height
+        with self.lock:
+            lateral, heading = self.lateral, self.heading
+            lat_ref, hd_ref, have_ref = self.lateral_ref, self.heading_ref, self.have_reference
+
+        cur = self._line_marker(stamp, 0, "tape_detected", (0.1, 1.0, 0.1, 0.9 if ok else 0.0))
+        if ok and lateral is not None:
+            for X in (self.x_near, self.x_far):
+                Y = lateral + math.tan(heading) * (X - self.x_lookahead)
+                cur.points.append(Point(x=X, y=Y, z=z))
+        else:
+            cur.action = Marker.DELETE
+        arr.markers.append(cur)
+
+        ref = self._line_marker(stamp, 1, "tape_reference", (0.2, 0.4, 1.0, 0.9 if have_ref else 0.0))
+        if have_ref:
+            for X in (self.x_near, self.x_far):
+                Y = lat_ref + math.tan(hd_ref) * (X - self.x_lookahead)
+                ref.points.append(Point(x=X, y=Y, z=z))
+        else:
+            ref.action = Marker.DELETE
+        arr.markers.append(ref)
+
+        self.pub_markers.publish(arr)
 
     def fit_line_bev(self, bev):
         ys, xs = np.nonzero(bev)                     # xs=col, ys=row

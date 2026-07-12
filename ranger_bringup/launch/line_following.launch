@@ -27,6 +27,7 @@
   <node pkg="ranger_bringup" type="tape_line_detector.py" name="tape_line_detector" output="screen">
     <remap from="~tape"         to="/ranger/tape"/>
     <remap from="~debug_image"  to="/ranger/tape_debug"/>
+    <remap from="~markers"      to="/ranger/tape_markers"/>
     <remap from="~set_reference" to="/ranger/tape/set_reference"/>
 
     <param name="base_frame"        value="$(arg base_frame)"/>
@@ -90,4 +91,11 @@
     <param name="default_tolerance" value="$(arg tolerance)"/>
     <param name="rate" value="20.0"/>
   </node>
+
+  <!-- ==== Optional RViz: BEV debug + raw camera + tape lines + tag frames ==== -->
+  <arg name="rviz" default="false"/>
+  <group if="$(arg rviz)">
+    <node pkg="rviz" type="rviz" name="rviz"
+          args="-d $(find ranger_bringup)/rviz/line_following.rviz" output="screen"/>
+  </group>
 </launch>

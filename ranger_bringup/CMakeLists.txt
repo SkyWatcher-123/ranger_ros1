@@ -165,7 +165,7 @@ catkin_install_python(PROGRAMS
 )
 
 ## Mark launch files and config for installation
-install(DIRECTORY launch config
+install(DIRECTORY launch config rviz
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
   OPTIONAL
 )
