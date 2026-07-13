@@ -26,6 +26,11 @@
   <!-- Publish rate of /ranger/joint_states (Hz). 3.0 per spec; 10.0 is also fine. -->
   <arg name="rate" default="3.0"/>
 
+  <!-- Settle-and-latch (freeze base pose after arrival so the arm sees a static TF) -->
+  <arg name="enable_hold" default="true"/>
+  <arg name="settle_time" default="1.5"/>   <!-- seconds to average before latching -->
+
+
   <!-- Known tag poses -> rosparam /tag_locations -->
   <arg name="tag_config" default="$(find ranger_bringup)/config/apriltag_localization_dfab_test.yaml"/>
   <rosparam file="$(arg tag_config)" command="load"/>
@@ -75,5 +80,16 @@
     <!-- Joint states are the product. Enable only if you also want nav_msgs/Odometry. -->
     <param name="publish_odom" value="false"/>
     <param name="base_height"  value="0.346"/>
+
+    <!-- Settle-and-latch: on arrival, average the pose for ~settle_time then FREEZE
+         it so the arm sees a static base TF (no AprilTag placement jitter).
+         hold_signal is driven by go_to_base_x's at_target; pose_locked tells the
+         arm when it's safe to plan/reach. -->
+    <remap from="~hold_signal" to="/ranger/at_target_x"/>
+    <remap from="~pose_locked" to="/ranger/base_pose_locked"/>
+    <param name="enable_hold"      value="$(arg enable_hold)"/>
+    <param name="settle_time"      value="$(arg settle_time)"/>
+    <param name="min_hold_samples" value="5"/>
+    <param name="hold_max_std"     value="0.05"/>
   </node>
 </launch>

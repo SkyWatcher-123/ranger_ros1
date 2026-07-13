@@ -42,6 +42,7 @@ for x/y, weighted circular mean for yaw).
 """
 
 import math
+import statistics
 
 import rospy
 import tf2_ros
@@ -50,6 +51,7 @@ from tf import transformations as tft
 from apriltag_ros.msg import AprilTagDetectionArray
 from sensor_msgs.msg import JointState
 from nav_msgs.msg import Odometry
+from std_msgs.msg import Bool
 
 
 def wrap_to_pi(a: float) -> float:
@@ -123,10 +125,27 @@ class AprilTagToRangerJointState:
         self.have_fix = False
         self.last_update = rospy.Time(0)
 
+        # --- Settle-and-latch (freeze base pose after arrival, so the arm sees a
+        #     static TF instead of AprilTag placement jitter). Triggered by the
+        #     ~hold_signal (Bool) topic -- wire it to go_to_base_x's at_target. ---
+        self.enable_hold = bool(rospy.get_param("~enable_hold", True))
+        self.settle_time = float(rospy.get_param("~settle_time", 1.5))       # s to average after arrival
+        self.min_hold_samples = int(rospy.get_param("~min_hold_samples", 5))
+        self.hold_max_std = float(rospy.get_param("~hold_max_std", 0.05))    # m; refuse to latch if noisier
+        self.hold_state = "LIVE"          # LIVE -> SETTLING -> HELD
+        self.hold_signal = False
+        self.settle_start = rospy.Time(0)
+        self.settle_samples = []
+        self.frozen = None                # (x, y, yaw) held pose
+
         self.pub_js = rospy.Publisher(self.js_topic, JointState, queue_size=10)
         self.pub_odom = rospy.Publisher("odom", Odometry, queue_size=10) if self.publish_odom else None
+        # Handshake for the arm: True only once the base pose is frozen and arm-safe.
+        self.pub_locked = rospy.Publisher("~pose_locked", Bool, queue_size=1, latch=True)
+        self.pub_locked.publish(Bool(data=False))
 
         rospy.Subscriber(self.tag_topic, AprilTagDetectionArray, self.cb_tags, queue_size=10)
+        rospy.Subscriber("~hold_signal", Bool, self.cb_hold, queue_size=1)
 
         rospy.loginfo(
             "[apriltag_to_ranger_joint_state] out=%s joints=[%s, %s, %s] base=%s "
@@ -226,13 +245,73 @@ class AprilTagToRangerJointState:
         self.have_fix = True
         self.last_update = rospy.Time.now()
 
-    def publish(self, now: rospy.Time):
-        yaw = wrap_to_pi(self.yaw)  # revolute joint limit is +-pi in the URDF
+    def cb_hold(self, msg: Bool):
+        if not self.enable_hold:
+            return
+        want = bool(msg.data)
+        if want and not self.hold_signal:
+            # Arrival: begin the settle window (average the pose, then latch).
+            self.hold_state = "SETTLING"
+            self.settle_start = rospy.Time.now()
+            self.settle_samples = []
+            self.pub_locked.publish(Bool(data=False))
+            rospy.loginfo("[apriltag_to_ranger_joint_state] arrival -> settling %.1fs before latch.",
+                          self.settle_time)
+        elif not want and self.hold_signal:
+            # New move commanded: release the freeze, resume live localization.
+            self.hold_state = "LIVE"
+            self.frozen = None
+            self.pub_locked.publish(Bool(data=False))
+            rospy.loginfo("[apriltag_to_ranger_joint_state] hold released -> live localization.")
+        self.hold_signal = want
+
+    def _latch_from_samples(self):
+        n = len(self.settle_samples)
+        if n < self.min_hold_samples:
+            rospy.logwarn("[apriltag_to_ranger_joint_state] only %d settle samples; staying LIVE.", n)
+            self.hold_state = "LIVE"
+            return
+        xs = [s[0] for s in self.settle_samples]
+        ys = [s[1] for s in self.settle_samples]
+        stdx = statistics.pstdev(xs)
+        stdy = statistics.pstdev(ys)
+        if max(stdx, stdy) > self.hold_max_std:
+            rospy.logwarn("[apriltag_to_ranger_joint_state] pose not settled "
+                          "(std x=%.1fmm y=%.1fmm > %.0fmm); staying LIVE.",
+                          stdx * 1000, stdy * 1000, self.hold_max_std * 1000)
+            self.hold_state = "LIVE"
+            return
+        mx = statistics.median(xs)
+        my = statistics.median(ys)
+        syaw = sum(math.sin(s[2]) for s in self.settle_samples) / n
+        cyaw = sum(math.cos(s[2]) for s in self.settle_samples) / n
+        myaw = math.atan2(syaw, cyaw)
+        self.frozen = (mx, my, myaw)
+        self.hold_state = "HELD"
+        self.pub_locked.publish(Bool(data=True))
+        rospy.loginfo("[apriltag_to_ranger_joint_state] LATCHED x=%.3f y=%.3f yaw=%.2fdeg "
+                      "(%d samples, std x=%.1fmm y=%.1fmm) -> arm-safe.",
+                      mx, my, math.degrees(myaw), n, stdx * 1000, stdy * 1000)
+
+    def _pose_to_publish(self, now):
+        """State machine -> (x, y, yaw) to output this tick."""
+        if self.hold_state == "SETTLING":
+            if self.have_fix:
+                self.settle_samples.append((self.x, self.y, self.yaw))
+            if (now - self.settle_start).to_sec() >= self.settle_time:
+                self._latch_from_samples()
+            return self.x, self.y, self.yaw          # keep publishing live while settling
+        if self.hold_state == "HELD" and self.frozen is not None:
+            return self.frozen                        # frozen -> zero jitter for the arm
+        return self.x, self.y, self.yaw               # LIVE
+
+    def publish(self, now, px, py, pyaw):
+        yaw = wrap_to_pi(pyaw)  # revolute joint limit is +-pi in the URDF
 
         js = JointState()
         js.header.stamp = now
         js.name = [self.joint_x, self.joint_y, self.joint_yaw]
-        js.position = [self.x, self.y, yaw]
+        js.position = [px, py, yaw]
         # velocity/effort intentionally left empty; robot_state_publisher only needs position.
         self.pub_js.publish(js)
 
@@ -242,8 +321,8 @@ class AprilTagToRangerJointState:
             od.header.stamp = now
             od.header.frame_id = self.odom_frame
             od.child_frame_id = self.base_frame
-            od.pose.pose.position.x = self.x
-            od.pose.pose.position.y = self.y
+            od.pose.pose.position.x = px
+            od.pose.pose.position.y = py
             od.pose.pose.position.z = self.base_height
             od.pose.pose.orientation.x = qx
             od.pose.pose.orientation.y = qy
@@ -255,16 +334,17 @@ class AprilTagToRangerJointState:
         r = rospy.Rate(self.rate)
         while not rospy.is_shutdown():
             now = rospy.Time.now()
+            px, py, pyaw = self._pose_to_publish(now)
             if not self.have_fix:
                 rospy.logwarn_throttle(
                     5.0, "No AprilTag fix yet; publishing init pose (x=%.2f y=%.2f yaw=%.2f)."
                     % (self.x, self.y, self.yaw))
-            else:
+            elif self.hold_state == "LIVE":
                 age = (now - self.last_update).to_sec()
                 if age > self.stale_timeout:
                     rospy.logwarn_throttle(
                         2.0, "AprilTag localization stale (%.2fs); holding last joint states." % age)
-            self.publish(now)
+            self.publish(now, px, py, pyaw)
             r.sleep()
 
 
