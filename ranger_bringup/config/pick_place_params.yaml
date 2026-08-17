@@ -1,0 +1,58 @@
+# =============================================================================
+# Pick-and-place parameters for pick_place_panel.py  (Ranger-Mini + xArm6)
+# Everything the node needs lives here. Fill the joint arrays from your robot
+# (e.g. `rostopic echo /joint_states` while jogging to each pose).
+# =============================================================================
+
+group_name: "xarm6"
+planning_frame: ""            # "" -> auto from move_group (e.g. "link_base" or "world")
+eef_link: ""                  # "" -> auto (group tip). Set explicitly if needed, e.g. "link_tcp"
+world_frame: "world"          # frame your (xg,yg,zg) goals and nominal tag poses are given in
+camera_frame: "xarm_color_frame"
+
+# ---- speed / cartesian tolerance ----
+vel_scale: 0.05
+acc_scale: 0.05
+min_cartesian_fraction: 0.9   # below this a Cartesian move asks for confirmation
+
+# ---- base (reuses /ranger/set_base_x + at_target + base_pose_locked) ----
+enable_base: true             # set false for arm-only / pure sim without the base stack
+pick_base_x: 1.23             # B1 fixed pick X [m, world/map]
+base_x_place_offset: 0.20     # C1 base stops at (xg - this)
+base_tolerance: 0.03          # 2-5 cm
+settle_timeout: 25.0          # s to wait for arrival + settle-lock
+
+# ---- fiducials ----
+pick_tag_frame: "tag0"        # apriltag_ros TF frame seen at the pick
+place_tag_frame: "tag1"       # apriltag_ros TF frame seen at the place
+pickup_world: [0.0, 1.20, 0.80]   # 5.1 nominal pick location (world xyz) -> fallback / sim
+pick_tag_rpy:  [0.0, 0.0, 0.0]    # nominal tag0 orientation (world rpy)
+place_tag_rpy: [0.0, 0.0, 0.0]    # assumed tag1 orientation at the goal (world rpy)
+pick_approach: 0.0            # optional standoff [m] along the tag normal before touching
+place_approach: 0.0
+# Full overrides (desired TCP pose expressed IN the tag frame, xyz+rpy). Uncomment to use
+# a fixed tool<-tag transform instead of "keep current orientation, go to tag position":
+# pick_tag_to_tcp:  [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+# place_tag_to_tcp: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+# ---- C3 place-tag scanning stand-off ----
+place_scan_local_z: 0.15      # camera sits +15cm along the tag's LOCAL Z (NOT world Z)
+place_cam_rpy_in_tag: [3.14159, 0.0, 0.0]  # camera orientation rel. to tag so optical Z faces it (TUNE)
+
+# ---- panel collision object ----
+panel_size: [0.2, 0.75, 0.005]         # box LxWxT [m]
+panel_attach_offset: [0.0, 0.0, -0.0025]   # center offset in eef frame (top face flush with tool)
+touch_links: []               # [] -> auto [eef_link]; add gripper/vacuum links if needed
+start_panel_index: 0          # names: panel_0 -> panel_1 -> ...
+
+# ---- default place goal (optional; else send via ~panel_goal topic or --xg/--yg/--zg) ----
+# default_goal: [3.60, 0.00, 0.80]
+
+# ---- named configurations (6 joints, order = group active joints) ----
+# If a name below is ALSO an SRDF group state, you may delete it here to use the SRDF one.
+# FILL THESE with real values before running on hardware.
+poses:
+  scan_pose:     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]   # B2: turned to face the aisle (tag0 in view)
+  hold_home:     [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]   # facing forward, safe travel/hold
+  hold_place:    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]   # C2: panel held over base footprint, facing place side
+  pick_out_pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]   # B5: safe pose to extract the panel

@@ -161,6 +161,7 @@ catkin_install_python(PROGRAMS
   scripts/tape_line_detector.py
   scripts/line_keeper.py
   scripts/go_to_base_x.py
+  scripts/pick_place_panel.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

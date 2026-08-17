@@ -1,0 +1,32 @@
+<launch>
+  <!-- ======================================================================= -->
+  <!-- Panel pick-and-place (Ranger-Mini + xArm6).                             -->
+  <!--                                                                         -->
+  <!-- Prereqs already running:                                                -->
+  <!--   * the xArm6 MoveIt stack (move_group, /compute_fk, /compute_ik, TF)   -->
+  <!--   * the base line-following stack (apriltag_to_ranger_joint_state +     -->
+  <!--     line_following.launch) so /ranger/set_base_x, /ranger/at_target_x   -->
+  <!--     and /ranger/base_pose_locked exist                                  -->
+  <!--   * apriltag_ros publishing /tag0, /tag1 TF                             -->
+  <!--                                                                         -->
+  <!-- INTERACTIVE 'y' stepping needs a real stdin, which roslaunch does NOT   -->
+  <!-- give a node. So for the test phase run the node in a terminal:          -->
+  <!--   rosrun ranger_bringup pick_place_panel.py \                           -->
+  <!--     _config:=$(rospack find ranger_bringup)/config/pick_place_params.yaml -->
+  <!-- Use THIS launch for auto:=true runs, or just to load params.            -->
+  <!-- ======================================================================= -->
+
+  <arg name="config" default="$(find ranger_bringup)/config/pick_place_params.yaml"/>
+  <arg name="sim"    default="false"/>   <!-- true: skip B2 + C3 visual moves -->
+  <arg name="auto"   default="false"/>   <!-- true: no 'y' prompts (needs no stdin) -->
+
+  <node name="pick_place_panel" pkg="ranger_bringup" type="pick_place_panel.py" output="screen">
+    <param name="config" value="$(arg config)"/>
+    <param name="sim"    value="$(arg sim)"/>
+    <param name="auto"   value="$(arg auto)"/>
+  </node>
+
+  <!-- Trigger a cycle (service-mode) once running:
+       rostopic pub -1 /pick_place_panel/panel_goal geometry_msgs/Point "{x: 3.6, y: 0.0, z: 0.8}"
+       rosservice call /pick_place_panel/place_panel  -->
+</launch>
