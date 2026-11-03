@@ -31,7 +31,6 @@
   <arg name="human_x_range"      default="0.7"/>    <!-- m ahead of base_link, in travel direction -->
   <arg name="human_y_range"      default="0.5"/>    <!-- m to either side -->
   <arg name="human_resume_delay" default="3.0"/>    <!-- s of continuously clear path before resuming -->
-  <arg name="human_ref_frame"    default="$(arg base_frame)"/>  <!-- distances measured from this frame (no bumper offset) -->
 
   <!-- ==== Tape detector: image to /ranger/tape (metric BEV line fit) ==== -->
   <node pkg="ranger_bringup" type="tape_line_detector.py" name="tape_line_detector" output="screen">
@@ -103,7 +102,8 @@
     <param name="default_tolerance" value="$(arg tolerance)"/>
     <param name="rate" value="20.0"/>
 
-    <!-- Human pause: person AHEAD within x_range and |y| <= y_range (base_link) -> hold still,
+    <!-- Human pause: person in the travel direction (in front when rolling forward, behind when
+         rolling backward) within x_range along x and |y| <= y_range of base_link -> hold still,
          goal stays active; resume after resume_delay s of clear path. -->
     <param name="human_pause_enable" value="$(arg human_pause)"/>
     <param name="human_topic"        value="/human_detection_3d"/>
@@ -111,7 +111,6 @@
     <param name="human_x_range"      value="$(arg human_x_range)"/>
     <param name="human_y_range"      value="$(arg human_y_range)"/>
     <param name="human_resume_delay" value="$(arg human_resume_delay)"/>
-    <param name="human_ref_frame"    value="$(arg human_ref_frame)"/>
     <param name="human_min_score"    value="0.5"/>
     <param name="human_timeout"      value="0.5"/>   <!-- s; older detections count as "no person" -->
   </node>

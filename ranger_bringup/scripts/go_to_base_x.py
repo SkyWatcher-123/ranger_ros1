@@ -12,9 +12,10 @@ Current X (and heading, to pick the travel direction) is read from TF
 map -> base_link, i.e. the fused AprilTag pose via robot_state_publisher.
 
 Human pause (optional; inert when no detections arrive):
-  A person from ~human_topic that is AHEAD in the travel direction, within
-  ~human_x_range [m] and |y| <= ~human_y_range [m] of ~human_ref_frame
-  (default: ~base_frame; no bumper offset), makes the base hold still. The goal stays ACTIVE (not
+  A person from ~human_topic that is AHEAD in the travel direction -- in front of
+  the robot while rolling forward, behind it while rolling backward -- within
+  ~human_x_range [m] along x and |y| <= ~human_y_range [m] of base_link (its
+  origin; no bumper offset), makes the base hold still. The goal stays ACTIVE (not
   marked done). Motion resumes once the path has been clear continuously for
   ~human_resume_delay seconds. Detector not running / stale detections -> old
   behaviour.
@@ -148,8 +149,6 @@ class GoToBaseX:
         self.human_y_range = float(rospy.get_param("~human_y_range", 0.5))
         self.human_min_score = float(rospy.get_param("~human_min_score", 0.5))
         self.human_timeout = float(rospy.get_param("~human_timeout", 0.5))   # older detections = none
-        # Frame the distances are measured in (its +x must be the robot's forward axis).
-        self.human_frame = rospy.get_param("~human_ref_frame", "") or self.base_frame
         self.pause = PauseLatch(float(rospy.get_param("~human_resume_delay", 3.0)))
         self.humans = []                  # [(x, y)] in base_link from the latest message
         self.humans_t = rospy.Time(0)     # receive time of the latest message
@@ -169,7 +168,7 @@ class GoToBaseX:
             return
         rospy.Subscriber(topic, cls, self.cb_humans, queue_size=1)
         rospy.loginfo("[go_to_base_x] human pause ON: %s ahead<=%.2f m |y|<=%.2f m of %s, resume after %.1f s",
-                      topic, self.human_x_range, self.human_y_range, self.human_frame, self.pause.delay)
+                      topic, self.human_x_range, self.human_y_range, self.base_frame, self.pause.delay)
 
     def cb_humans(self, msg):
         pts, tf_cache = [], {}
@@ -180,11 +179,11 @@ class GoToBaseX:
             if frame not in tf_cache:
                 try:
                     tf_cache[frame] = self.tf_buffer.lookup_transform(
-                        self.human_frame, frame, rospy.Time(0), rospy.Duration(0.05))
+                        self.base_frame, frame, rospy.Time(0), rospy.Duration(0.05))
                 except Exception as e:
                     tf_cache[frame] = None
                     rospy.logwarn_throttle(5.0, "[go_to_base_x] human TF %s->%s: %s",
-                                           frame, self.human_frame, e)
+                                           frame, self.base_frame, e)
             if tf_cache[frame] is None:
                 continue
             c = det.bbox.center.position
@@ -230,7 +229,7 @@ class GoToBaseX:
         if status == self.status:
             return
         extra = "" if blocker is None else " (person at x=%.2f y=%.2f m in %s)" % (
-            blocker[0], blocker[1], getattr(self, "human_frame", self.base_frame))
+            blocker[0], blocker[1], self.base_frame)
         rospy.loginfo("[go_to_base_x] status %s -> %s%s", self.status or "-", status, extra)
         self.status = status
         self.pub_status.publish(String(data=status))
