@@ -9,6 +9,9 @@
   <!-- Requires apriltag_to_ranger_joint_state.launch running too, so    -->
   <!-- TF map->base_link exists (go_to_base_x reads current X from it).  -->
   <!-- Run EITHER go_to_base_x OR manual teleop into /ranger/cmd_vel_in. -->
+  <!--                                                                   -->
+  <!-- Human pause: go_to_base_x holds still while /human_detection_3d   -->
+  <!-- shows a person ahead; rosservice call /clear_ranger_goal cancels. -->
   <!-- ================================================================= -->
 
   <arg name="base_frame"  default="base_link"/>
@@ -22,6 +25,12 @@
   <arg name="tolerance"    default="0.03"/>  <!-- go-to-X longitudinal stop tolerance, 2-5 cm -->
   <arg name="lateral_tolerance" default="0.03"/>  <!-- allowed left/right drift band [m]; live-tunable -->
   <arg name="live_tune"    default="true"/>  <!-- re-read gains/tolerance mid-run via rosparam set -->
+
+  <!-- Human pause (inside go_to_base_x). Inert when /human_detection_3d is absent or empty. -->
+  <arg name="human_pause"        default="true"/>   <!-- false = exact old behaviour -->
+  <arg name="human_x_range"      default="0.7"/>    <!-- m ahead of base_link, in travel direction -->
+  <arg name="human_y_range"      default="0.5"/>    <!-- m to either side -->
+  <arg name="human_resume_delay" default="3.0"/>    <!-- s of continuously clear path before resuming -->
 
   <!-- ==== Tape detector: image to /ranger/tape (metric BEV line fit) ==== -->
   <node pkg="ranger_bringup" type="tape_line_detector.py" name="tape_line_detector" output="screen">
@@ -84,12 +93,25 @@
     <remap from="~set_base_x"  to="/ranger/set_base_x"/>
     <remap from="~at_target"   to="/ranger/at_target_x"/>
     <remap from="~x_error"     to="/ranger/base_x_error"/>
+    <remap from="~clear_ranger_goal" to="/clear_ranger_goal"/>        <!-- manual cancel -->
+    <remap from="~goal_status"       to="/ranger/base_goal_status"/>  <!-- IDLE/MOVING/PAUSED_HUMAN/REACHED/CANCELLED -->
 
     <param name="map_frame"  value="$(arg map_frame)"/>
     <param name="base_frame" value="$(arg base_frame)"/>
     <param name="speed"      value="$(arg travel_speed)"/>
     <param name="default_tolerance" value="$(arg tolerance)"/>
     <param name="rate" value="20.0"/>
+
+    <!-- Human pause: person AHEAD within x_range and |y| <= y_range (base_link) -> hold still,
+         goal stays active; resume after resume_delay s of clear path. -->
+    <param name="human_pause_enable" value="$(arg human_pause)"/>
+    <param name="human_topic"        value="/human_detection_3d"/>
+    <param name="human_msg_type"     value="vision_msgs/Detection3DArray"/>
+    <param name="human_x_range"      value="$(arg human_x_range)"/>
+    <param name="human_y_range"      value="$(arg human_y_range)"/>
+    <param name="human_resume_delay" value="$(arg human_resume_delay)"/>
+    <param name="human_min_score"    value="0.5"/>
+    <param name="human_timeout"      value="0.5"/>   <!-- s; older detections count as "no person" -->
   </node>
 
   <!-- ==== Optional RViz: BEV debug + raw camera + tape lines + tag frames ==== -->

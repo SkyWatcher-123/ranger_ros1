@@ -43,7 +43,7 @@ from tf import transformations as tft
 
 import moveit_commander
 from geometry_msgs.msg import Pose, PoseStamped, Point
-from std_msgs.msg import Bool, Header
+from std_msgs.msg import Bool, Header, String
 from std_srvs.srv import Trigger, TriggerResponse
 from moveit_msgs.srv import GetPositionFK, GetPositionIK
 from moveit_msgs.msg import PositionIKRequest
@@ -111,6 +111,8 @@ class PickPlace(object):
         self.pose_locked = False
         rospy.Subscriber("/ranger/at_target_x", Bool, lambda m: setattr(self, "at_target", m.data))
         rospy.Subscriber("/ranger/base_pose_locked", Bool, lambda m: setattr(self, "pose_locked", m.data))
+        self.base_status = ""      # from go_to_base_x: MOVING / PAUSED_HUMAN / REACHED / CANCELLED
+        rospy.Subscriber("/ranger/base_goal_status", String, lambda m: setattr(self, "base_status", m.data))
 
         # panel bookkeeping
         self.panel_size = list(cfg.get("panel_size", [0.2, 0.75, 0.005]))
@@ -176,6 +178,7 @@ class PickPlace(object):
             return True
         self.at_target = False
         self.pose_locked = False
+        self.base_status = ""
         rospy.loginfo("[base] set_base_x -> %.3f (tol %.3f)", x, self.base_tol)
         try:
             subprocess.check_call(["rosservice", "call", "/ranger/set_base_x",
@@ -183,10 +186,17 @@ class PickPlace(object):
         except Exception as e:
             rospy.logerr("[base] set_base_x call failed: %s", e)
             return False
-        t0 = rospy.Time.now()
+        elapsed, last = 0.0, rospy.Time.now()
         rate = rospy.Rate(10)
         while not rospy.is_shutdown() and not self.pose_locked:
-            if (rospy.Time.now() - t0).to_sec() > self.settle_timeout:
+            now = rospy.Time.now()
+            if self.base_status == "CANCELLED":                 # operator: /clear_ranger_goal
+                rospy.logerr("[base] goal cancelled by operator")
+                return False
+            if self.base_status != "PAUSED_HUMAN":               # waiting for a person doesn't count
+                elapsed += (now - last).to_sec()
+            last = now
+            if elapsed > self.settle_timeout:
                 rospy.logerr("[base] timed out waiting for arrival+lock")
                 return False
             rate.sleep()
