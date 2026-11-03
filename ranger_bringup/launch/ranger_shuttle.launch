@@ -1,0 +1,56 @@
+<launch>
+  <!-- ================================================================== -->
+  <!-- Shuttle test: Ranger Mini goes back and forth between x_a and x_b   -->
+  <!-- (map frame) and logs every human pause, stall, leg and the          -->
+  <!-- trajectory to $(arg log_dir)/<date_time>[_run_tag]/.                -->
+  <!--                                                                    -->
+  <!-- Needs, already running (separate terminals):                       -->
+  <!--   ranger_bringup apriltag_to_ranger_joint_state.launch  (TF map->base_link) -->
+  <!--   ranger_bringup line_following.launch                  (go_to_base_x)      -->
+  <!--   tracking_3d human_3d_tracker.launch    (optional: person positions)       -->
+  <!-- Ctrl-C here cancels the active goal (/clear_ranger_goal), so the   -->
+  <!-- base stops at once, then writes summary.json.                      -->
+  <!-- ================================================================== -->
+
+  <arg name="x_a"          default="1.2"/>    <!-- m, end A (map x) -->
+  <arg name="x_b"          default="4.8"/>    <!-- m, end B (map x) -->
+  <arg name="dwell"        default="1.0"/>    <!-- s to wait at each end before turning back -->
+  <arg name="tolerance"    default="0.0"/>    <!-- m arrival tolerance; 0 = go_to_base_x default -->
+  <arg name="max_travels"  default="0"/>      <!-- end after this many end-to-end travels; 0 = no limit -->
+  <arg name="max_duration" default="0"/>      <!-- s; end at the next arrival after this; 0 = no limit -->
+  <arg name="first_target" default="auto"/>   <!-- auto | a | b -->
+  <arg name="on_cancel"    default="stop"/>   <!-- external /clear_ranger_goal: stop the run | resume -->
+  <arg name="log_dir"      default="$(env HOME)/ranger_shuttle_logs"/>
+  <arg name="run_tag"      default=""/>       <!-- appended to the run folder name, e.g. busy_hallway -->
+  <arg name="traj_rate"    default="10.0"/>   <!-- Hz, trajectory.csv -->
+
+  <node pkg="ranger_bringup" type="ranger_shuttle.py" name="ranger_shuttle" output="screen">
+    <param name="x_a"          value="$(arg x_a)"/>
+    <param name="x_b"          value="$(arg x_b)"/>
+    <param name="dwell"        value="$(arg dwell)"/>
+    <param name="tolerance"    value="$(arg tolerance)"/>
+    <param name="max_travels"  value="$(arg max_travels)"/>
+    <param name="max_duration" value="$(arg max_duration)"/>
+    <param name="first_target" value="$(arg first_target)" type="str"/>
+    <param name="on_cancel"    value="$(arg on_cancel)"    type="str"/>
+    <param name="log_dir"      value="$(arg log_dir)"      type="str"/>
+    <param name="run_tag"      value="$(arg run_tag)"      type="str"/>
+    <param name="traj_rate"    value="$(arg traj_rate)"/>
+
+    <!-- Interfaces of line_following.launch -->
+    <param name="set_base_x_service" value="/ranger/set_base_x"/>
+    <param name="clear_goal_service" value="/clear_ranger_goal"/>
+    <param name="status_topic"       value="/ranger/base_goal_status"/>
+    <param name="map_frame"          value="map"/>
+    <param name="base_frame"         value="base_link"/>
+    <!-- speed and human_* (x/y range, resume delay, topic) are read from this namespace,
+         so the logged "person in the lane" rule is the one go_to_base_x applies. -->
+    <param name="go_to_base_x_ns"    value="/go_to_base_x"/>
+
+    <!-- Stall = status MOVING but the base moved < stall_min_dist in stall_window s -->
+    <param name="stall_window"   value="2.0"/>
+    <param name="stall_min_dist" value="0.03"/>
+    <param name="summary_period" value="10.0"/>   <!-- s, rewrite summary.json + console line -->
+    <param name="bin_size"       value="0.2"/>    <!-- m, histogram of pause locations along x -->
+  </node>
+</launch>

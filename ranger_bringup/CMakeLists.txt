@@ -162,6 +162,7 @@ catkin_install_python(PROGRAMS
   scripts/line_keeper.py
   scripts/go_to_base_x.py
   scripts/pick_place_panel.py
+  scripts/ranger_shuttle.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
